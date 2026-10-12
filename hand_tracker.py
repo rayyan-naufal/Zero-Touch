@@ -292,15 +292,15 @@ class HandTracker:
 
     def _update_finger_cursor(
         self,
-        idx_tip: Any,
+        tracking_tip: Any,
         is_overridden: bool,
         current_mouse_pos: Optional[Tuple[float, float]],
         screen_w: int,
         screen_h: int,
         now: float,
     ) -> Tuple[float, float]:
-        """Calculates smooth cursor position from index finger tip with Smart Sensitivity ballistics."""
-        curr_finger = (idx_tip.x, idx_tip.y)
+        """Calculates smooth cursor position from tracking finger tip (middle finger in 3-finger mode, index finger otherwise)."""
+        curr_finger = (tracking_tip.x, tracking_tip.y)
         speed = getattr(self.config, "hand_cursor_speed", 2.0)
         smart_sens_enabled = getattr(self.config, "hand_smart_sensitivity", True)
 
@@ -312,8 +312,8 @@ class HandTracker:
                 curr_x, curr_y = current_mouse_pos
                 self.accum_screen_x = float(curr_x)
                 self.accum_screen_y = float(curr_y)
-                dx_raw = (idx_tip.x - 0.5) * speed
-                dy_raw = (idx_tip.y - 0.5) * speed
+                dx_raw = (tracking_tip.x - 0.5) * speed
+                dy_raw = (tracking_tip.y - 0.5) * speed
                 self.screen_origin_x = float(curr_x) - (dx_raw * screen_w)
                 self.screen_origin_y = float(curr_y) - (dy_raw * screen_h)
                 self.smoothed_x = float(curr_x)
@@ -677,9 +677,10 @@ class HandTracker:
                             target_cursor_pos = None
 
                 if target_cursor_pos == "PROCEED_TO_MOVE" or (not is_3finger and idx_ext and not mid_ext and not ring_ext and not pinky_ext):
-                    # Index finger pointing ONLY: move cursor smoothly
-                    idx_tip = landmarks[self.INDEX_TIP]
-                    curr_finger = (idx_tip.x, idx_tip.y)
+                    # Pointing / Move cursor smoothly:
+                    # In 3-Finger Control mode, track middle fingertip to prevent cursor drift when curling index finger to click.
+                    tracking_tip = landmarks[self.MIDDLE_TIP] if is_3finger else landmarks[self.INDEX_TIP]
+                    curr_finger = (tracking_tip.x, tracking_tip.y)
                     speed = getattr(self.config, "hand_cursor_speed", 2.0)
                     smart_sens_enabled = getattr(self.config, "hand_smart_sensitivity", True)
 
@@ -691,8 +692,8 @@ class HandTracker:
                             curr_x, curr_y = current_mouse_pos
                             self.accum_screen_x = float(curr_x)
                             self.accum_screen_y = float(curr_y)
-                            dx_raw = (idx_tip.x - 0.5) * speed
-                            dy_raw = (idx_tip.y - 0.5) * speed
+                            dx_raw = (tracking_tip.x - 0.5) * speed
+                            dy_raw = (tracking_tip.y - 0.5) * speed
                             self.screen_origin_x = float(curr_x) - (dx_raw * screen_w)
                             self.screen_origin_y = float(curr_y) - (dy_raw * screen_h)
                             self.smoothed_x = float(curr_x)
@@ -779,8 +780,8 @@ class HandTracker:
                             target_cursor_pos = (self.smoothed_x, self.smoothed_y)
                         else:
                             # --- Linear Raw Mode Bypass ---
-                            dx_raw = (idx_tip.x - 0.5) * speed
-                            dy_raw = (idx_tip.y - 0.5) * speed
+                            dx_raw = (tracking_tip.x - 0.5) * speed
+                            dy_raw = (tracking_tip.y - 0.5) * speed
                             if self.screen_origin_x is None or self.screen_origin_y is None:
                                 if current_mouse_pos is not None:
                                     self.screen_origin_x = float(current_mouse_pos[0]) - (dx_raw * screen_w)

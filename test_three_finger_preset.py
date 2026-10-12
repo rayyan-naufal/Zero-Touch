@@ -95,6 +95,52 @@ class TestThreeFingerPreset(unittest.TestCase):
         self.assertAlmostEqual(pos[0], 960.0, places=2)
         self.assertAlmostEqual(pos[1], 540.0, places=2)
 
+    def test_three_finger_cursor_tracks_middle_finger_not_index(self):
+        """In 3-Finger mode, cursor tracks middle finger tip. Moving index finger alone must not move cursor."""
+        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+
+        # Frame 1: Stable 3-finger pose
+        landmarks1 = self._create_synthetic_landmarks(idx_ext=True, mid_ext=True, ring_ext=True, pinky_ext=False)
+        class DummyResult1:
+            multi_hand_landmarks = [MagicMock(landmark=landmarks1)]
+            multi_handedness = [MagicMock(classification=[MagicMock(label="Right")])]
+
+        self.tracker.hands.process = MagicMock(return_value=DummyResult1())
+        pos1, _, _, _ = self.tracker.process_frame(frame, 1920, 1080, current_mouse_pos=(960, 540))
+        self.assertIsNotNone(pos1)
+
+        # Frame 2: Index finger lowers/moves down (simulating user beginning to curl index finger for left click)
+        # Middle finger remains completely steady at base_x=0.50, tip_y=0.20
+        landmarks2 = self._create_synthetic_landmarks(idx_ext=True, mid_ext=True, ring_ext=True, pinky_ext=False)
+        # Lower only the index finger tip
+        landmarks2[self.tracker.INDEX_TIP] = DummyLandmark(0.35, 0.35, 0.0)
+
+        class DummyResult2:
+            multi_hand_landmarks = [MagicMock(landmark=landmarks2)]
+            multi_handedness = [MagicMock(classification=[MagicMock(label="Right")])]
+
+        self.tracker.hands.process = MagicMock(return_value=DummyResult2())
+        time.sleep(0.02)  # small delta time
+        pos2, _, _, _ = self.tracker.process_frame(frame, 1920, 1080, current_mouse_pos=(pos1[0], pos1[1]))
+
+        # Since middle finger did not move, cursor should remain at the same position (no drift)
+        self.assertAlmostEqual(pos2[0], pos1[0], delta=1.0)
+        self.assertAlmostEqual(pos2[1], pos1[1], delta=1.0)
+
+        # Frame 3: Now move the middle finger tip to the right
+        landmarks3 = self._create_synthetic_landmarks(idx_ext=True, mid_ext=True, ring_ext=True, pinky_ext=False)
+        landmarks3[self.tracker.MIDDLE_TIP] = DummyLandmark(0.55, 0.20, 0.0)
+
+        class DummyResult3:
+            multi_hand_landmarks = [MagicMock(landmark=landmarks3)]
+            multi_handedness = [MagicMock(classification=[MagicMock(label="Right")])]
+
+        self.tracker.hands.process = MagicMock(return_value=DummyResult3())
+        time.sleep(0.02)
+        pos3, _, _, _ = self.tracker.process_frame(frame, 1920, 1080, current_mouse_pos=(pos2[0], pos2[1]))
+        # Cursor should now have moved right (x increases)
+        self.assertGreater(pos3[0], pos2[0])
+
     def test_index_curled_triggers_left_click(self):
         """When Index is curled while Middle and Ring are extended, Left Click is classified and mapped."""
         landmarks = self._create_synthetic_landmarks(idx_ext=False, mid_ext=True, ring_ext=True, pinky_ext=False)
